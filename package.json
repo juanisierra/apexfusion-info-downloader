@@ -6,7 +6,7 @@
     "type": "module",
   "scripts": {
     "start": "node main.js",
-    "start-new": "node main-new.js",
+    "start-new": "node main.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
