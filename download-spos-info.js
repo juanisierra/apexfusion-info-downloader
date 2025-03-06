@@ -10,7 +10,7 @@ const csvConfig = mkConfig({ useKeysAsHeaders: true, filename: 'sposExport' });
 const writeCSV = (dataArray) => {
     // Converts your Array<Object> to a CsvOutput string based on the configs
     const csv = generateCsv(csvConfig)(dataArray);
-    const filename = `${csvConfig.filename}.csv`;
+    const filename = `output/${csvConfig.filename}.csv`;
     const csvBuffer = new Uint8Array(Buffer.from(asString(csv)));
 
     // Write the csv file to disk
