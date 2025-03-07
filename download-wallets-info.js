@@ -33,7 +33,7 @@ const writeCSV = (fileName, dataArray) => {
 const getAddressDetails = async (walletAddress) => {
     return new Promise((resolve, reject) => {
     let data = [];
-    https.get(`https://beta-explorer-api.prime.mainnet.apexfusion.org/api/v1/addresses/${walletAddress}/txs?page=0&size=100&sort=`, async res => {
+    https.get(`https://beta-explorer-api.prime.mainnet.apexfusion.org/api/v1/addresses/${walletAddress}/txs?page=0&size=100&sort=`, async res => { // TODO: Add pagination
     res.on('data', d => {
         data.push(d);
       });
@@ -43,12 +43,58 @@ const getAddressDetails = async (walletAddress) => {
         } catch(e) {
             reject(e);
         }
-        resolve(data.data.map(tx => prettyfyTransactions(walletAddress, tx)));
+        resolve(data.data.map(tx => getTxDetails(walletAddress, tx.hash)));
     });
     }
     );
 })
 };
+
+
+const getTxDetails = async (walletAddress, txHash) => {
+  return new Promise((resolve, reject) => {
+  let data = [];
+  https.get(`https://beta-explorer-api.prime.mainnet.apexfusion.org/api/v1/txs/${txHash}`, async res => {
+  res.on('data', d => {
+      data.push(d);
+    });
+    res.on('end', function() {
+      try {
+         data = JSON.parse(Buffer.concat(data).toString());
+      } catch(e) {
+          reject(e);
+      }
+      resolve(prettyFyTransaction(walletAddress, data).flat());
+  });
+  }
+  );
+})
+};
+
+const prettyFyTransaction = (targetWallet, transaction) => {
+   if (transaction.utxOs.inputs.find(utxo => utxo.address === targetWallet)) {  // Out Tx
+    return transaction.utxOs.outputs.filter(out => out.address != targetWallet).map(out => {
+      return {
+        ...transaction.tx,
+        addressesInput: [targetWallet],
+        addressesOutput: [out.address],
+        balance: out.value
+      }
+    });
+
+   } else { // In Tx
+      return transaction.utxOs.outputs.filter(out => out.address === targetWallet).map(out => {
+        return {
+          ...transaction.tx,
+          addressesInput: transaction.utxOs.inputs.map(i => i.address),
+          addressesOutput: [targetWallet],
+          balance: out.value
+        }
+      });
+
+   }
+  };
+
 // {
 //   hash: 'a04b5777770d5ecab8eefdba4a9017ee0c333729f17d42600269e81951bea5e4',
 //   blockNo: 281716,
@@ -125,7 +171,11 @@ const prettyfyTransactions = (wallet, tx) => {
 const getWalletsData = async () => {
   const walletsData = await Promise.all(walletList.map(async wallet => {
             const walletData = await getAddressDetails(wallet['address']);
-            writeCSV(`${wallet.name}_${wallet.address}`, walletData);
+            Promise.all(walletData).then(data => {
+              const prettyTransactions = data.map(txs => txs.map((tx) => prettyfyTransactions(wallet.address, tx)).flat()).flat();
+              console.log(prettyTransactions);
+              writeCSV(`${wallet.name}_${wallet.address}`, prettyTransactions);
+            });
             }));
           };
 
