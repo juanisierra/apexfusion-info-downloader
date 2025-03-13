@@ -78,7 +78,8 @@ const prettyFyTransaction = (targetWallet, transaction) => {
         ...transaction.tx,
         addressesInput: [targetWallet],
         addressesOutput: [out.address],
-        balance: out.value
+        balance: out.value,
+        multiInput: false
       }
     });
 
@@ -88,7 +89,8 @@ const prettyFyTransaction = (targetWallet, transaction) => {
           ...transaction.tx,
           addressesInput: transaction.utxOs.inputs.map(i => i.address),
           addressesOutput: [targetWallet],
-          balance: out.value
+          balance: out.value,
+          multiInput: transaction.utxOs.inputs.length > 1 
         }
       });
 
@@ -151,7 +153,8 @@ const prettyfyTransactions = (wallet, tx) => {
     // addressesInput: tx.addressesInput,
     // addressesOutput: tx.addressesOutput,
     fee: tx.fee/1000000,
-    amount: tx.balance/1000000
+    amount: tx.balance/1000000,
+    multiInput: tx.multiInput
   }
    if (tx.addressesInput.includes(wallet)) {  // Out Tx
     txData['direction'] = 'out';
