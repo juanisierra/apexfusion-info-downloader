@@ -8,15 +8,13 @@ import { debug } from 'console';
 const csvConfig = mkConfig({ useKeysAsHeaders: true, filename: 'sposExport' });
 
 const walletList = [{
-  name: 'aff-community',
-  address: 'addr1wygkkppe29csrk9tg0pka0kx25g9uh7nnvkt03xyuj8dptqxxumvu'
+  name: 'aff-initial',
+  address: 'addr1q9puewjsf309lh63d0knc52mdmhkvc58gh8wvpplgamvcp0xs0uamkjh6tsg4djaqnugycc4c8hhqc6s9d0cfykqr4lslet7r9'
 },
 {
-  name: 'aff-operations',
-  address: 'addr1wyxv0kjvgjm7ulj0l3epu3jptcfkrajnn2rc9g68awzmu7q3u6n6c'
-}
-
-]
+  name: 'aff-spos',
+  address: 'addr1qx7y79jlawvqzpmr74d946szewzkq7utfqfjz6u3ywfq5579qatwjlpsjn8lq09u27c89juf8gcjcsglg9rzrxd6ytlq6cztry'
+}]
 const writeCSV = (fileName, dataArray) => {
     // Converts your Array<Object> to a CsvOutput string based on the configs
     const csv = generateCsv(mkConfig({ useKeysAsHeaders: true, filename: fileName }))(dataArray);
@@ -33,21 +31,39 @@ const writeCSV = (fileName, dataArray) => {
 const getAddressDetails = async (walletAddress) => {
     return new Promise((resolve, reject) => {
     let data = [];
-    https.get(`https://beta-explorer-api.prime.mainnet.apexfusion.org/api/v1/addresses/${walletAddress}/txs?page=0&size=100&sort=`, async res => { // TODO: Add pagination
+    let transactions = [];
+    https.get(`https://beta-explorer-api.prime.mainnet.apexfusion.org/api/v1/addresses/${walletAddress}/txs?page=0&size=100&sort=`, async res => {
     res.on('data', d => {
-        data.push(d);
+        data.push(d); 
       });
-      res.on('end', function() {
-        try {
-           data = JSON.parse(Buffer.concat(data).toString());
-        } catch(e) {
-            reject(e);
-        }
-        resolve(data.data.map(tx => getTxDetails(walletAddress, tx.hash)));
+      res.on('end', async () => {
+        const allData = JSON.parse(Buffer.concat(data).toString());
+        resolve([...Array(allData.totalPages).keys()].map(i =>getPage(walletAddress,i)));
     });
     }
     );
 })
+};
+
+const getPage = async (walletAddress, page) => {
+  return new Promise((resolve, reject) => {
+    let data = [];
+    https.get(`https://beta-explorer-api.prime.mainnet.apexfusion.org/api/v1/addresses/${walletAddress}/txs?page=${page}&size=100&sort=`, res => {
+      let txData = [];
+      res.on('data', d => {
+        txData.push(d); 
+       });
+        res.on('end', function() {
+          try {
+              const parsedTx = JSON.parse(Buffer.concat(txData).toString()).data;
+              resolve(parsedTx.map(tx => getTxDetails(walletAddress, tx.hash)));
+          } catch(e) {
+              reject(e);
+    }
+  }
+  );
+})
+});
 };
 
 
@@ -61,10 +77,11 @@ const getTxDetails = async (walletAddress, txHash) => {
     res.on('end', function() {
       try {
          data = JSON.parse(Buffer.concat(data).toString());
+        //  console.log(data);
+         return resolve(prettyFyTransaction(walletAddress, data));
       } catch(e) {
           reject(e);
       }
-      resolve(prettyFyTransaction(walletAddress, data).flat());
   });
   }
   );
@@ -173,11 +190,14 @@ const prettyfyTransactions = (wallet, tx) => {
 
 const getWalletsData = async () => {
   const walletsData = await Promise.all(walletList.map(async wallet => {
+            console.log(`Getting data for wallet ${wallet.name}`);
             const walletData = await getAddressDetails(wallet['address']);
             Promise.all(walletData).then(data => {
-              const prettyTransactions = data.map(txs => txs.map((tx) => prettyfyTransactions(wallet.address, tx)).flat()).flat();
-              console.log(prettyTransactions);
-              writeCSV(`${wallet.name}_${wallet.address}`, prettyTransactions);
+              Promise.all(data.flat()).then(transactions => {
+                const p = transactions.flat().map(tx => prettyfyTransactions(wallet.address, tx));
+                writeCSV(`${wallet.name}_${wallet.address}`, p);
+              }
+              )
             });
             }));
           };
